@@ -50,11 +50,15 @@ vars:
     GENEVE_PORTS: 6081
     VXLAN_PORTS: 4789
     TEREDO_PORTS: 3544
+
 ##
+## Step 2: Select outputs to enable
+##
+
 # The default logging directory.  Any log or output file will be
 # placed here if it's not specified with a full path name. This can be
 # overridden with the -l command line parameter.
-default-log-dir: /home/pslearner/Desktop/Lab/
+default-log-dir: /var/log/suricata/
 
 # Global stats configuration
 stats:
@@ -247,8 +251,11 @@ outputs:
             # output TLS transaction where the session is resumed using a
             # session id
             #session-resumption: no
+            # ja4 hashes in tls records will never be logged unless
+            # the following is set to on. (Default off)
+            # ja4: off
             # custom controls which TLS fields that are included in eve-log
-            #custom: [subject, issuer, session_resumed, serial, fingerprint, sni, version, not_before, not_after, certificate, chain, ja3, ja3s]
+            #custom: [subject, issuer, session_resumed, serial, fingerprint, sni, version, not_before, not_after, certificate, chain, ja3, ja3s, ja4]
         - files:
             force-magic: no   # force logging magic on all logged files
             # force logging of checksums, available hash functions are md5,
@@ -287,7 +294,10 @@ outputs:
         - snmp
         - rfb
         - sip
-        - quic
+        - quic:
+            # ja4 hashes in quic records will never be logged unless
+            # the following is set to on. (Default off)
+            # ja4: off
         - dhcp:
             enabled: yes
             # When extended mode is on, all DHCP messages are logged
@@ -749,6 +759,7 @@ dpdk:
       # - auto takes all cores
       # in IPS mode it is required to specify the number of cores and the numbers on both interfaces must match
       threads: auto
+      # interrupt-mode: false # true to switch to interrupt mode 
       promisc: true # promiscuous mode - capture all packets
       multicast: true # enables also detection on multicast packets
       checksum-checks: true # if Suricata should validate checksums
@@ -888,9 +899,10 @@ app-layer:
       detection-ports:
         dp: 443
 
-      # Generate JA3 fingerprint from client hello. If not specified it
+      # Generate JA3/JA4 fingerprints from client hello. If not specified it
       # will be disabled by default, but enabled if rules require it.
       #ja3-fingerprints: auto
+      #ja4-fingerprints: auto
 
       # What to do when the encrypted communications start:
       # - default: keep tracking TLS session, check for protocol anomalies,
@@ -930,9 +942,13 @@ app-layer:
       #max-streams: 4096
       # Maximum headers table size
       #max-table-size: 65536
+      # Maximum reassembly size for header + continuation frames
+      #max-reassembly-size: 102400
     smtp:
       enabled: yes
       raw-extraction: no
+      # Maximum number of live SMTP transactions per flow
+      # max-tx: 256
       # Configure SMTP-MIME Decoder
       mime:
         # Decode MIME messages from SMTP transactions
@@ -1080,6 +1096,8 @@ app-layer:
            #compression-bomb-limit: 1mb
            # Maximum time spent decompressing a single transaction in usec
            #decompression-time-limit: 100000
+           # Maximum number of live transactions per flow
+           #max-tx: 512
 
          server-config:
 
@@ -1198,13 +1216,13 @@ security:
     enabled: no
     directories:
       #write:
-      #  - @e_rundir@
+      #  - /var/run/
       # /usr and /etc folders are added to read list to allow
       # file magic to be used.
       read:
         - /usr/
         - /etc/
-        - /etc/suricata 
+        - /etc/suricata/
 
   lua:
     # Allow Lua rules. Disabled by default.
@@ -1217,7 +1235,7 @@ security:
 # Default location of the pid file. The pid file is only used in
 # daemon mode (start Suricata with -D). If not running in daemon mode
 # the --pidfile command line option must be used to create a pid file.
-#pid-file: @e_rundir@suricata.pid
+#pid-file: /var/run/suricata.pid
 
 # Daemon working directory
 # Suricata will change directory to this one if provided
@@ -1286,7 +1304,7 @@ unix-command:
 
 # Magic file. The extension .mgc is added to the value here.
 #magic-file: /usr/share/file/magic
-#@e_magic_file_comment@magic-file: @e_magic_file@
+#magic-file: 
 
 # GeoIP2 database file. Specify path and filename of GeoIP2 database
 # if using rules with "geoip" rule option.
@@ -1324,8 +1342,8 @@ legacy:
 exception-policy: auto
 
 # IP Reputation
-#reputation-categories-file: @e_sysconfdir@iprep/categories.txt
-#default-reputation-path: @e_sysconfdir@iprep
+#reputation-categories-file: /etc/suricata/iprep/categories.txt
+#default-reputation-path: /etc/suricata/iprep
 #reputation-files:
 # - reputation.list
 
@@ -1794,6 +1812,10 @@ profiling:
     enabled: yes
     filename: rule_perf.log
     append: yes
+    # Set active to yes to enable rules profiling at start
+    # if set to no (default), the rules profiling will have to be started
+    # via unix socket commands.
+    #active:no
 
     # Sort options: ticks, avgticks, checks, matches, maxticks
     # If commented out all the sort options will be used.
@@ -1803,7 +1825,7 @@ profiling:
     limit: 10
 
     # output to json
-    json: true
+    json: yes
 
   # per keyword profiling
   keywords:
@@ -2137,7 +2159,7 @@ napatech:
 ## Configure Suricata to load Suricata-Update managed rules.
 ##
 
-default-rule-path: /usr/share/suricata/rules
+default-rule-path: /var/lib/suricata/rules
 
 rule-files:
   - suricata.rules
@@ -2147,8 +2169,8 @@ rule-files:
 ##
 
 classification-file: /etc/suricata/classification.config
-reference-config-file: /etc/suricata/classification.config
-# threshold-file: @e_sysconfdir@threshold.config
+reference-config-file: /etc/suricata/reference.config
+# threshold-file: /etc/suricata/threshold.config
 
 ##
 ## Include other configs
@@ -2161,3 +2183,4 @@ reference-config-file: /etc/suricata/classification.config
 #include:
 #  - include1.yaml
 #  - include2.yaml
+
